@@ -282,6 +282,9 @@ void drvAmptek::checkFailedComm(const char *functionName)
 void drvAmptek::exitHandler()
 {
     CH_.Close_Connection();
+    // Wait a little bit in case the IOC is restarted right away;
+    // usually it fails to connect
+    epicsThreadSleep(1.0);
 }
 
 bool drvAmptek::directConnect(char* addr)
@@ -407,8 +410,8 @@ asynStatus drvAmptek::saveConfigurationFile(string fileName)
 
     if ( (out = fopen(fileName.c_str(),"w")) == NULL) {
         asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
-            "%s::%s Couldn't open %s for writing.\n", 
-            driverName, functionName, fileName.c_str());
+            "%s::%s Couldn't open file '%s' for writing: %s.\n",
+            driverName, functionName, fileName.c_str(), strerror(errno));
         return asynError;
     }
     fprintf(out,"%s",CH_.HwCfgDP5.c_str());
@@ -428,15 +431,21 @@ asynStatus drvAmptek::sendConfigurationFile(string fileName)
     bool isDP5_RevDxGains;
     unsigned char DPP_ECO;
     asynStatus status;
-    //static const char *functionName="sendConfigurationFile";
+    static const char *functionName="sendConfigurationFile";
 
     isPC5Present = CH_.DP5Stat.m_DP5_Status.PC5_PRESENT;
-    // Note: we need to add 5 to the DEVICE_ID to get the deviceType used by AsciiCmdUtil.RemoveCmdByDeviceType
-    DppType = CH_.DP5Stat.m_DP5_Status.DEVICE_ID+5;
+    // Note: we need to add devtypeDP5 to the DEVICE_ID to get the deviceType used by AsciiCmdUtil.RemoveCmdByDeviceType
+    DppType = CH_.DP5Stat.m_DP5_Status.DEVICE_ID + devtypeDP5;
     isDP5_RevDxGains = CH_.DP5Stat.m_DP5_Status.isDP5_RevDxGains;
     DPP_ECO = CH_.DP5Stat.m_DP5_Status.DPP_ECO;
 
     strCfg = CH_.SndCmd.AsciiCmdUtil.GetDP5CfgStr(fileName);
+    if (strCfg.length() == 0) {
+        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s::%s Couldn't open file '%s' for reading or other error: %s.\n",
+            driverName, functionName, fileName.c_str(), strerror(errno));
+        return asynError;
+    }
     strCfg = CH_.SndCmd.AsciiCmdUtil.RemoveCmdByDeviceType(strCfg,isPC5Present,DppType,isDP5_RevDxGains,DPP_ECO);
     lCfgLen = (int)strCfg.length();
     if (lCfgLen > 512) {    // configuration too large, needs fix
