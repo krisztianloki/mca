@@ -302,7 +302,7 @@ asynStatus drvAmptek::sendConfigurationFile(string fileName)
     bool isDP5_RevDxGains;
     unsigned char DPP_ECO;
     asynStatus status;
-    //static const char *functionName="sendConfigurationFile";
+    static const char *functionName="sendConfigurationFile";
 
     isPC5Present = CH_.DP5Stat.m_DP5_Status.PC5_PRESENT;
     DppType = CH_.DP5Stat.m_DP5_Status.DEVICE_ID;
@@ -312,6 +312,12 @@ asynStatus drvAmptek::sendConfigurationFile(string fileName)
     strCfg = CH_.SndCmd.AsciiCmdUtil.GetDP5CfgStr(fileName);
     strCfg = CH_.SndCmd.AsciiCmdUtil.RemoveCmdByDeviceType(strCfg,isPC5Present,DppType,isDP5_RevDxGains,DPP_ECO);
     lCfgLen = (int)strCfg.length();
+    if (lCfgLen == 0) {
+        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s::%s error reading configuration file '%s')\n",
+            driverName, functionName, fileName.c_str());
+        return asynError;
+    }
     if (lCfgLen > 512) {    // configuration too large, needs fix
         bSplitCfg = true;
         idxSplitCfg = CH_.SndCmd.AsciiCmdUtil.GetCmdChunk(strCfg);
